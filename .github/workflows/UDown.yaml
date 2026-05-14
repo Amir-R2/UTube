@@ -1,4 +1,4 @@
-name: Download, Split, and Push to Repo (with Cookies)
+name: Video Downloader
 
 on:
   workflow_dispatch:
@@ -22,17 +22,17 @@ on:
           - 'bestaudio (best audio only)'
           - 'mp3 (convert to MP3)'
       chunk_size_mb:
-        description: 'Chunk size in MB (GitHub raw limit is ~100MB, use 95 for safety)'
+        description: 'Chunk size in MB'
         required: false
         type: string
         default: '95'
       output_folder:
-        description: 'Output folder in repo (default: downloads)'
+        description: 'Output folder in repo'
         required: false
         type: string
         default: 'downloads'
       use_cookies:
-        description: 'Use cookies to avoid YouTube bot detection?'
+        description: 'Use cookies?'
         required: false
         type: boolean
         default: false
@@ -48,13 +48,22 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup yt-dlp
-        uses: AnimMouse/setup-yt-dlp@v3    # ← FIXED: changed from v5 to v3
+        uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Setup yt-dlp YouTube cookies (if enabled)
+      - name: Create cookies file manually
         if: github.event.inputs.use_cookies == 'true'
-        uses: AnimMouse/setup-yt-dlp/cookies@v3    # ← Also use v3 for cookies
-        with:
-          cookies: ${{ secrets.YOUTUBE_COOKIES }}
+        run: |
+          mkdir -p .github
+          # Decode and write the cookies from secret
+          echo "${{ secrets.YOUTUBE_COOKIES }}" > .github/cookies.txt
+          
+          # Verify cookies file exists and has content
+          if [ -s .github/cookies.txt ]; then
+            echo "Cookies file created successfully"
+            wc -l .github/cookies.txt
+          else
+            echo "Warning: Cookies file is empty"
+          fi
 
       - name: Download from URL
         run: |
@@ -63,11 +72,9 @@ jobs:
           
           cd "$OUTPUT_DIR"
           
-          # Check if it's a YouTube URL
           if [[ "${{ github.event.inputs.url }}" =~ (youtube\.com|youtu\.be) ]]; then
             echo "Downloading YouTube video..."
             
-            # Set quality based on user choice
             QUALITY="${{ github.event.inputs.quality }}"
             
             if [ "$QUALITY" = "best (highest quality)" ]; then
@@ -89,9 +96,19 @@ jobs:
               FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
             fi
             
-            yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
-              -o "%(title)s.%(ext)s" \
-              "${{ github.event.inputs.url }}"
+            # Download with cookies if enabled
+            if [[ "${{ github.event.inputs.use_cookies }}" == "true" ]] && [[ -f "../.github/cookies.txt" ]]; then
+              echo "Using cookies for download..."
+              yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
+                --cookies "../.github/cookies.txt" \
+                -o "%(title)s.%(ext)s" \
+                "${{ github.event.inputs.url }}"
+            else
+              echo "Downloading without cookies..."
+              yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
+                -o "%(title)s.%(ext)s" \
+                "${{ github.event.inputs.url }}"
+            fi
             
           else
             echo "Downloading direct file..."
@@ -99,7 +116,6 @@ jobs:
           fi
           
           cd ../..
-          
           echo "Download complete"
 
       - name: Split file into chunks
@@ -109,7 +125,6 @@ jobs:
           
           cd "$OUTPUT_DIR"
           
-          # Find the downloaded file
           DOWNLOADED_FILE=$(ls -t | grep -v manifest.txt | head -1)
           
           if [[ -z "$DOWNLOADED_FILE" ]]; then
@@ -119,14 +134,11 @@ jobs:
           
           echo "Splitting: $DOWNLOADED_FILE"
           
-          # Get filename without extension
           BASENAME="${DOWNLOADED_FILE%.*}"
           EXTENSION="${DOWNLOADED_FILE##*.}"
           
-          # Split into chunks
           split -b $CHUNK_SIZE -d "$DOWNLOADED_FILE" "${BASENAME}.part"
           
-          # Rename to .001, .002 format
           for file in ${BASENAME}.part*; do
             if [[ -f "$file" ]]; then
               num=$(echo "$file" | grep -o '[0-9]*$')
@@ -135,10 +147,8 @@ jobs:
             fi
           done
           
-          # Count chunks
           CHUNK_COUNT=$(ls -1 ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} 2>/dev/null | wc -l)
           
-          # Create manifest
           echo "URL: ${{ github.event.inputs.url }}" > manifest.txt
           echo "Quality: ${{ github.event.inputs.quality }}" >> manifest.txt
           echo "Filename: $DOWNLOADED_FILE" >> manifest.txt
@@ -148,9 +158,7 @@ jobs:
           echo "" >> manifest.txt
           echo "To reassemble: cat ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} > $DOWNLOADED_FILE" >> manifest.txt
           
-          echo ""
           cat manifest.txt
-          echo ""
           
           cd ../..
 
