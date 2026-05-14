@@ -221,20 +221,3 @@ jobs:
           
           # Create manifest
           cat > manifest.txt << EOF
-===========================================
-📋 SMART DOWNLOAD MANIFEST
-===========================================
-URL: ${{ github.event.inputs.url }}
-Quality: ${{ github.event.inputs.quality }}
-Filename: $DOWNLOADED_FILE
-Original Size: ${FILE_SIZE_MB} MB
-Base Chunk Size: ${BASE_CHUNK_MB} MB
-Actual Chunk Size: ${ACTUAL_CHUNK_SIZE} MB
-Total Chunks: ${ACTUAL_CHUNK_COUNT}
-Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-Cookies Used: ${{ github.event.inputs.use_cookies }}
-Cookie Parts: 5
-===========================================
-
-🔧 To reassemble the file:
-cat ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} > $DOWNLOADED_FILE
