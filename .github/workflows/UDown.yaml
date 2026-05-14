@@ -1,4 +1,4 @@
-name: Smart Download with Split Cookies (5 Parts)
+name: Smart Download with Split Cookies (10 Parts)
 
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ on:
         type: string
         default: 'downloads'
       use_cookies:
-        description: 'Use YouTube cookies? (requires COOKIES_PART1-5 secrets)'
+        description: 'Use YouTube cookies? (requires COOKIES_PART1-10 secrets)'
         required: false
         type: boolean
         default: false
@@ -49,25 +49,26 @@ jobs:
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Combine split cookies into one file (5 parts)
+      - name: Combine split cookies into one file (10 parts)
         if: github.event.inputs.use_cookies == 'true'
         run: |
           mkdir -p .github
-          
-          # Combine all five cookie parts
           echo "${{ secrets.COOKIES_PART1 }}" > .github/cookies.txt
           echo "${{ secrets.COOKIES_PART2 }}" >> .github/cookies.txt
           echo "${{ secrets.COOKIES_PART3 }}" >> .github/cookies.txt
           echo "${{ secrets.COOKIES_PART4 }}" >> .github/cookies.txt
           echo "${{ secrets.COOKIES_PART5 }}" >> .github/cookies.txt
+          echo "${{ secrets.COOKIES_PART6 }}" >> .github/cookies.txt
+          echo "${{ secrets.COOKIES_PART7 }}" >> .github/cookies.txt
+          echo "${{ secrets.COOKIES_PART8 }}" >> .github/cookies.txt
+          echo "${{ secrets.COOKIES_PART9 }}" >> .github/cookies.txt
+          echo "${{ secrets.COOKIES_PART10 }}" >> .github/cookies.txt
           
-          # Verify cookies file
           if [ -s .github/cookies.txt ]; then
-            echo "✅ Cookies file created successfully from 5 parts"
+            echo "Cookies file created from 10 parts"
             echo "Size: $(wc -c < .github/cookies.txt) bytes"
-            echo "Lines: $(wc -l < .github/cookies.txt) lines"
           else
-            echo "❌ Failed to create cookies file"
+            echo "Failed to create cookies file"
             exit 1
           fi
 
@@ -79,7 +80,7 @@ jobs:
           cd "$OUTPUT_DIR"
           
           if [[ "${{ github.event.inputs.url }}" =~ (youtube\.com|youtu\.be) ]]; then
-            echo "📺 Downloading YouTube video..."
+            echo "Downloading YouTube video..."
             
             QUALITY="${{ github.event.inputs.quality }}"
             
@@ -102,28 +103,26 @@ jobs:
               FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
             fi
             
-            # Download with or without cookies
             if [[ "${{ github.event.inputs.use_cookies }}" == "true" ]] && [[ -f "../.github/cookies.txt" ]]; then
-              echo "🍪 Using cookies for download..."
+              echo "Using cookies for download..."
               yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
                 --cookies "../.github/cookies.txt" \
-                --no-check-certificate \
                 -o "%(title)s.%(ext)s" \
                 "${{ github.event.inputs.url }}"
             else
-              echo "🍪 Downloading without cookies..."
+              echo "Downloading without cookies..."
               yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
                 -o "%(title)s.%(ext)s" \
                 "${{ github.event.inputs.url }}"
             fi
             
           else
-            echo "📁 Downloading direct file..."
-            wget --no-check-certificate -O downloaded-file "${{ github.event.inputs.url }}"
+            echo "Downloading direct file..."
+            wget -O downloaded-file "${{ github.event.inputs.url }}"
           fi
           
           cd ../..
-          echo "✅ Download complete"
+          echo "Download complete"
 
       - name: Smart split file into chunks
         run: |
@@ -132,62 +131,48 @@ jobs:
           
           cd "$OUTPUT_DIR"
           
-          # Find the downloaded file (exclude manifest and chunk files)
           DOWNLOADED_FILE=$(ls -t | grep -v manifest.txt | grep -v '.[0-9][0-9][0-9].' | head -1)
           
           if [[ -z "$DOWNLOADED_FILE" ]]; then
-            echo "❌ No file found to split"
+            echo "No file found to split"
             exit 1
           fi
           
           BASENAME="${DOWNLOADED_FILE%.*}"
           EXTENSION="${DOWNLOADED_FILE##*.}"
           
-          # Get file size in MB
           FILE_SIZE_BYTES=$(stat -c%s "$DOWNLOADED_FILE")
           FILE_SIZE_MB=$(echo "scale=2; $FILE_SIZE_BYTES / 1048576" | bc)
           FILE_SIZE_MB_INT=$(printf "%.0f" "$FILE_SIZE_MB")
           
-          echo "========================================="
-          echo "📦 File: $DOWNLOADED_FILE"
-          echo "📏 Size: ${FILE_SIZE_MB} MB"
-          echo "🎯 Base chunk size: ${BASE_CHUNK_MB} MB"
-          echo "========================================="
+          echo "File: $DOWNLOADED_FILE"
+          echo "Size: ${FILE_SIZE_MB} MB"
+          echo "Base chunk size: ${BASE_CHUNK_MB} MB"
           
-          # Smart chunk size logic
           if [ $FILE_SIZE_MB_INT -le $BASE_CHUNK_MB ]; then
-            # File is smaller than base chunk, don't split
-            echo "✓ File is smaller than ${BASE_CHUNK_MB}MB, no splitting needed"
+            echo "File is smaller than ${BASE_CHUNK_MB}MB, no splitting needed"
             cp "$DOWNLOADED_FILE" "${BASENAME}.001.${EXTENSION}"
             CHUNK_COUNT=1
             ACTUAL_CHUNK_SIZE=$FILE_SIZE_MB_INT
-            # Remove original
             rm -f "$DOWNLOADED_FILE"
           else
-            # Calculate optimal chunk size
             MIN_CHUNKS=3
             MAX_CHUNKS=10
             GITHUB_LIMIT_MB=95
             
-            # Calculate ideal chunk size for 5 chunks
             IDEAL_CHUNK_SIZE=$(( $FILE_SIZE_MB_INT / 5 ))
             
-            # Apply constraints
             if [ $IDEAL_CHUNK_SIZE -gt $GITHUB_LIMIT_MB ]; then
-              # File is huge, use GitHub max limit
               CHUNK_SIZE=$GITHUB_LIMIT_MB
               CHUNK_COUNT=$(( ($FILE_SIZE_MB_INT + $CHUNK_SIZE - 1) / $CHUNK_SIZE ))
             elif [ $IDEAL_CHUNK_SIZE -lt $BASE_CHUNK_MB ]; then
-              # File is medium, use base chunk size
               CHUNK_SIZE=$BASE_CHUNK_MB
               CHUNK_COUNT=$(( ($FILE_SIZE_MB_INT + $CHUNK_SIZE - 1) / $CHUNK_SIZE ))
             else
-              # Use ideal chunk size
               CHUNK_SIZE=$IDEAL_CHUNK_SIZE
               CHUNK_COUNT=$(( ($FILE_SIZE_MB_INT + $CHUNK_SIZE - 1) / $CHUNK_SIZE ))
             fi
             
-            # Ensure chunk count is reasonable
             if [ $CHUNK_COUNT -lt $MIN_CHUNKS ]; then
               CHUNK_SIZE=$(( $FILE_SIZE_MB_INT / $MIN_CHUNKS ))
               CHUNK_COUNT=$MIN_CHUNKS
@@ -199,11 +184,10 @@ jobs:
             CHUNK_SIZE_BYTES=$(( $CHUNK_SIZE * 1024 * 1024 ))
             ACTUAL_CHUNK_SIZE=$CHUNK_SIZE
             
-            echo "⚡ Smart splitting: ${FILE_SIZE_MB_INT}MB file into ${CHUNK_COUNT} chunks of ~${CHUNK_SIZE}MB each"
+            echo "Splitting ${FILE_SIZE_MB_INT}MB file into ${CHUNK_COUNT} chunks of ~${CHUNK_SIZE}MB each"
             
             split -b $CHUNK_SIZE_BYTES -d "$DOWNLOADED_FILE" "${BASENAME}.part"
             
-            # Rename chunks with proper numbering
             for file in ${BASENAME}.part*; do
               if [[ -f "$file" ]]; then
                 num=$(echo "$file" | grep -o '[0-9]*$')
@@ -212,12 +196,51 @@ jobs:
               fi
             done
             
-            # Remove original file after splitting
             rm -f "$DOWNLOADED_FILE"
           fi
           
-          # Verify chunks
           ACTUAL_CHUNK_COUNT=$(ls -1 ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} 2>/dev/null | wc -l)
           
-          # Create manifest
-          cat > manifest.txt << EOF
+          echo "URL: ${{ github.event.inputs.url }}" > manifest.txt
+          echo "Quality: ${{ github.event.inputs.quality }}" >> manifest.txt
+          echo "Filename: $DOWNLOADED_FILE" >> manifest.txt
+          echo "Original Size: ${FILE_SIZE_MB} MB" >> manifest.txt
+          echo "Base Chunk Size: ${BASE_CHUNK_MB} MB" >> manifest.txt
+          echo "Actual Chunk Size: ${ACTUAL_CHUNK_SIZE} MB" >> manifest.txt
+          echo "Total Chunks: ${ACTUAL_CHUNK_COUNT}" >> manifest.txt
+          echo "Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> manifest.txt
+          echo "Cookies Used: ${{ github.event.inputs.use_cookies }}" >> manifest.txt
+          echo "" >> manifest.txt
+          echo "To reassemble: cat ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} > $DOWNLOADED_FILE" >> manifest.txt
+          echo "" >> manifest.txt
+          echo "Download URLs:" >> manifest.txt
+          
+          for chunk in ${BASENAME}.[0-9][0-9][0-9].${EXTENSION}; do
+            if [[ -f "$chunk" ]]; then
+              echo "https://raw.githubusercontent.com/${{ github.repository }}/main/$OUTPUT_DIR/$chunk" >> manifest.txt
+            fi
+          done
+          
+          echo ""
+          echo "Split Complete!"
+          echo "Original: ${FILE_SIZE_MB} MB"
+          echo "Chunks: ${ACTUAL_CHUNK_COUNT}"
+          echo "Chunk size: ~${ACTUAL_CHUNK_SIZE} MB each"
+          echo ""
+          cat manifest.txt
+          
+          cd ../..
+
+      - name: Push to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add "${{ github.event.inputs.output_folder }}/"
+          git commit -m "Smart download: ${{ github.event.inputs.url }}" || echo "No changes to commit"
+          git push
+          
+          echo "Download complete!" >> $GITHUB_STEP_SUMMARY
+          echo "URL: ${{ github.event.inputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "Quality: ${{ github.event.inputs.quality }}" >> $GITHUB_STEP_SUMMARY
+          echo "Check the downloads folder for chunks" >> $GITHUB_STEP_SUMMARY
