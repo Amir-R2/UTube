@@ -51,11 +51,15 @@ jobs:
         uses: AnimMouse/setup-yt-dlp@v5
 
       - name: Create cookies file if enabled
-        if: github.event.inputs.use_cookies == 'true' && secrets.YOUTUBE_COOKIES != ''
+        if: github.event.inputs.use_cookies == 'true'
         run: |
           mkdir -p .github
-          echo "${{ secrets.YOUTUBE_COOKIES }}" > .github/cookies.txt
-          echo "Cookies file created"
+          if [ -n "${{ secrets.YOUTUBE_COOKIES }}" ]; then
+            echo "${{ secrets.YOUTUBE_COOKIES }}" > .github/cookies.txt
+            echo "Cookies file created"
+          else
+            echo "Warning: use_cookies is true but YOUTUBE_COOKIES secret is not set"
+          fi
 
       - name: Download from URL
         run: |
