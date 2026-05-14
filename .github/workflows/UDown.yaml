@@ -1,4 +1,4 @@
-name: Video Downloader
+name: Download, Split, and Push to Repo (with Cookies)
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ on:
         description: 'Chunk size in MB (GitHub raw limit is ~100MB, use 95 for safety)'
         required: false
         type: string
-        default: '50'
+        default: '95'
       output_folder:
         description: 'Output folder in repo (default: downloads)'
         required: false
@@ -50,12 +50,12 @@ jobs:
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v5
 
-      - name: Create cookies file (if enabled)
+      - name: Create cookies file if enabled
         if: github.event.inputs.use_cookies == 'true' && secrets.YOUTUBE_COOKIES != ''
         run: |
           mkdir -p .github
           echo "${{ secrets.YOUTUBE_COOKIES }}" > .github/cookies.txt
-          echo "✅ Cookies file created"
+          echo "Cookies file created"
 
       - name: Download from URL
         run: |
@@ -66,61 +66,52 @@ jobs:
           
           # Check if it's a YouTube URL
           if [[ "${{ github.event.inputs.url }}" =~ (youtube\.com|youtu\.be) ]]; then
-            echo "📺 Downloading YouTube video..."
+            echo "Downloading YouTube video..."
             
             # Set quality based on user choice
             QUALITY="${{ github.event.inputs.quality }}"
             
-            case "$QUALITY" in
-              "best (highest quality)")
-                FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-                ;;
-              "1080p")
-                FORMAT="bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]"
-                ;;
-              "720p")
-                FORMAT="bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]"
-                ;;
-              "480p")
-                FORMAT="bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]"
-                ;;
-              "360p")
-                FORMAT="bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]"
-                ;;
-              "bestaudio (best audio only)")
-                FORMAT="bestaudio/best"
-                ;;
-              "mp3 (convert to MP3)")
-                FORMAT="bestaudio/best"
-                EXTRACT_AUDIO="--extract-audio --audio-format mp3 --audio-quality 0"
-                ;;
-              *)
-                FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
-                ;;
-            esac
+            if [ "$QUALITY" = "best (highest quality)" ]; then
+              FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            elif [ "$QUALITY" = "1080p" ]; then
+              FORMAT="bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]"
+            elif [ "$QUALITY" = "720p" ]; then
+              FORMAT="bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]"
+            elif [ "$QUALITY" = "480p" ]; then
+              FORMAT="bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]"
+            elif [ "$QUALITY" = "360p" ]; then
+              FORMAT="bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]"
+            elif [ "$QUALITY" = "bestaudio (best audio only)" ]; then
+              FORMAT="bestaudio/best"
+            elif [ "$QUALITY" = "mp3 (convert to MP3)" ]; then
+              FORMAT="bestaudio/best"
+              EXTRACT_AUDIO="--extract-audio --audio-format mp3 --audio-quality 0"
+            else
+              FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+            fi
             
             # Download with or without cookies
             if [[ "${{ github.event.inputs.use_cookies }}" == "true" ]] && [[ -f "../.github/cookies.txt" ]]; then
-              echo "🍪 Using cookies for download..."
+              echo "Using cookies for download..."
               yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
                 --cookies "../.github/cookies.txt" \
                 -o "%(title)s.%(ext)s" \
                 "${{ github.event.inputs.url }}"
             else
-              echo "🍪 Downloading without cookies..."
+              echo "Downloading without cookies..."
               yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
                 -o "%(title)s.%(ext)s" \
                 "${{ github.event.inputs.url }}"
             fi
             
           else
-            echo "📁 Downloading direct file..."
+            echo "Downloading direct file..."
             wget -O downloaded-file "${{ github.event.inputs.url }}"
           fi
           
           cd ../..
           
-          echo "✅ Download complete!"
+          echo "Download complete"
 
       - name: Split file into chunks
         run: |
@@ -129,15 +120,15 @@ jobs:
           
           cd "$OUTPUT_DIR"
           
-          # Find the downloaded file (most recent file that's not manifest.txt)
+          # Find the downloaded file
           DOWNLOADED_FILE=$(ls -t | grep -v manifest.txt | head -1)
           
           if [[ -z "$DOWNLOADED_FILE" ]]; then
-            echo "❌ No file found to split!"
+            echo "No file found to split"
             exit 1
           fi
           
-          echo "📦 Splitting: $DOWNLOADED_FILE"
+          echo "Splitting: $DOWNLOADED_FILE"
           
           # Get filename without extension
           BASENAME="${DOWNLOADED_FILE%.*}"
@@ -155,17 +146,18 @@ jobs:
             fi
           done
           
+          # Count chunks
+          CHUNK_COUNT=$(ls -1 ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} 2>/dev/null | wc -l)
+          
           # Create manifest
-          cat > manifest.txt << EOF
-URL: ${{ github.event.inputs.url }}
-Quality: ${{ github.event.inputs.quality }}
-Filename: $DOWNLOADED_FILE
-Chunk Size: ${{ github.event.inputs.chunk_size_mb }} MB
-Total Chunks: $(ls -1 ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} 2>/dev/null | wc -l)
-Date: $(date)
-
-To reassemble: cat ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} > $DOWNLOADED_FILE
-EOF
+          echo "URL: ${{ github.event.inputs.url }}" > manifest.txt
+          echo "Quality: ${{ github.event.inputs.quality }}" >> manifest.txt
+          echo "Filename: $DOWNLOADED_FILE" >> manifest.txt
+          echo "Chunk Size: ${{ github.event.inputs.chunk_size_mb }} MB" >> manifest.txt
+          echo "Total Chunks: $CHUNK_COUNT" >> manifest.txt
+          echo "Date: $(date)" >> manifest.txt
+          echo "" >> manifest.txt
+          echo "To reassemble: cat ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} > $DOWNLOADED_FILE" >> manifest.txt
           
           echo ""
           cat manifest.txt
@@ -181,32 +173,3 @@ EOF
           git add "${{ github.event.inputs.output_folder }}/"
           git commit -m "Download: ${{ github.event.inputs.url }}" || echo "No changes to commit"
           git push
-          
-          # Create summary
-          OUTPUT_DIR="${{ github.event.inputs.output_folder }}"
-          cd "$OUTPUT_DIR"
-          DOWNLOADED_FILE=$(ls -t | grep -v manifest.txt | head -1)
-          BASENAME="${DOWNLOADED_FILE%.*}"
-          EXTENSION="${DOWNLOADED_FILE##*.}"
-          TOTAL_CHUNKS=$(ls -1 ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} 2>/dev/null | wc -l)
-          cd ../..
-          
-          echo "## ✅ Download Complete!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**File:** $DOWNLOADED_FILE" >> $GITHUB_STEP_SUMMARY
-          echo "**Quality:** ${{ github.event.inputs.quality }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Total Chunks:** $TOTAL_CHUNKS" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Download URLs:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          for i in $(seq -f "%03g" 1 $TOTAL_CHUNKS); do
-            echo "- https://raw.githubusercontent.com/${{ github.repository }}/main/$OUTPUT_DIR/${BASENAME}.${i}.${EXTENSION}" >> $GITHUB_STEP_SUMMARY
-          done
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Reassemble with:" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "curl -O https://raw.githubusercontent.com/${{ github.repository }}/main/$OUTPUT_DIR/manifest.txt" >> $GITHUB_STEP_SUMMARY
-          echo "cat ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} > $DOWNLOADED_FILE" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
