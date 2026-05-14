@@ -1,4 +1,4 @@
-name: Video Downloader
+name: Download, Split, and Push to Repo (with Cookies)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,6 @@ on:
         description: 'Enter URL (YouTube video, direct file, or any link)'
         required: true
         type: string
-        default: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
       quality:
         description: 'Video quality (for YouTube)'
         required: false
@@ -31,11 +30,6 @@ on:
         required: false
         type: string
         default: 'downloads'
-      use_cookies:
-        description: 'Use cookies?'
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   download-and-split:
@@ -50,20 +44,17 @@ jobs:
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Create cookies file manually
-        if: github.event.inputs.use_cookies == 'true'
+      - name: Create cookies file from split secrets
         run: |
           mkdir -p .github
-          # Decode and write the cookies from secret
-          echo "${{ secrets.YOUTUBE_COOKIES }}" > .github/cookies.txt
+          # Combine the split cookie parts
+          echo -n "${{ secrets.COOKIES_PART1 }}" > .github/cookies.txt
+          echo -n "${{ secrets.COOKIES_PART2 }}" >> .github/cookies.txt
+          # Add more if you have COOKIES_PART3, COOKIES_PART4 etc.
           
-          # Verify cookies file exists and has content
-          if [ -s .github/cookies.txt ]; then
-            echo "Cookies file created successfully"
-            wc -l .github/cookies.txt
-          else
-            echo "Warning: Cookies file is empty"
-          fi
+          echo "Cookies file created with size:"
+          wc -c .github/cookies.txt
+          wc -l .github/cookies.txt
 
       - name: Download from URL
         run: |
@@ -73,7 +64,7 @@ jobs:
           cd "$OUTPUT_DIR"
           
           if [[ "${{ github.event.inputs.url }}" =~ (youtube\.com|youtu\.be) ]]; then
-            echo "Downloading YouTube video..."
+            echo "Downloading YouTube video with cookies..."
             
             QUALITY="${{ github.event.inputs.quality }}"
             
@@ -96,19 +87,10 @@ jobs:
               FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
             fi
             
-            # Download with cookies if enabled
-            if [[ "${{ github.event.inputs.use_cookies }}" == "true" ]] && [[ -f "../.github/cookies.txt" ]]; then
-              echo "Using cookies for download..."
-              yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
-                --cookies "../.github/cookies.txt" \
-                -o "%(title)s.%(ext)s" \
-                "${{ github.event.inputs.url }}"
-            else
-              echo "Downloading without cookies..."
-              yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
-                -o "%(title)s.%(ext)s" \
-                "${{ github.event.inputs.url }}"
-            fi
+            yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
+              --cookies "../.github/cookies.txt" \
+              -o "%(title)s.%(ext)s" \
+              "${{ github.event.inputs.url }}"
             
           else
             echo "Downloading direct file..."
@@ -165,7 +147,7 @@ jobs:
       - name: Push to repository
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config.user.email "github-actions[bot]@users.noreply.github.com"
           
           git add "${{ github.event.inputs.output_folder }}/"
           git commit -m "Download: ${{ github.event.inputs.url }}" || echo "No changes to commit"
