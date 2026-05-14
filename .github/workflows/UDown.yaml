@@ -1,10 +1,10 @@
-name: Download, Split, and Push to Repo (with Cookies)
+name: Download, Split, and Push to Repo
 
 on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'Enter URL (YouTube video, direct file, or any link)'
+        description: 'Enter URL (YouTube video or direct file)'
         required: true
         type: string
       quality:
@@ -13,13 +13,13 @@ on:
         type: choice
         default: 'best'
         options:
-          - 'best (highest quality)'
+          - 'best'
           - '1080p'
           - '720p'
           - '480p'
           - '360p'
-          - 'bestaudio (best audio only)'
-          - 'mp3 (convert to MP3)'
+          - 'bestaudio'
+          - 'mp3'
       chunk_size_mb:
         description: 'Chunk size in MB'
         required: false
@@ -44,18 +44,6 @@ jobs:
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Create cookies file from split secrets
-        run: |
-          mkdir -p .github
-          # Combine the split cookie parts
-          echo -n "${{ secrets.COOKIES_PART1 }}" > .github/cookies.txt
-          echo -n "${{ secrets.COOKIES_PART2 }}" >> .github/cookies.txt
-          # Add more if you have COOKIES_PART3, COOKIES_PART4 etc.
-          
-          echo "Cookies file created with size:"
-          wc -c .github/cookies.txt
-          wc -l .github/cookies.txt
-
       - name: Download from URL
         run: |
           OUTPUT_DIR="${{ github.event.inputs.output_folder }}"
@@ -64,11 +52,11 @@ jobs:
           cd "$OUTPUT_DIR"
           
           if [[ "${{ github.event.inputs.url }}" =~ (youtube\.com|youtu\.be) ]]; then
-            echo "Downloading YouTube video with cookies..."
+            echo "Downloading YouTube video..."
             
             QUALITY="${{ github.event.inputs.quality }}"
             
-            if [ "$QUALITY" = "best (highest quality)" ]; then
+            if [ "$QUALITY" = "best" ]; then
               FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
             elif [ "$QUALITY" = "1080p" ]; then
               FORMAT="bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]"
@@ -78,19 +66,28 @@ jobs:
               FORMAT="bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]"
             elif [ "$QUALITY" = "360p" ]; then
               FORMAT="bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]"
-            elif [ "$QUALITY" = "bestaudio (best audio only)" ]; then
+            elif [ "$QUALITY" = "bestaudio" ]; then
               FORMAT="bestaudio/best"
-            elif [ "$QUALITY" = "mp3 (convert to MP3)" ]; then
+            elif [ "$QUALITY" = "mp3" ]; then
               FORMAT="bestaudio/best"
               EXTRACT_AUDIO="--extract-audio --audio-format mp3 --audio-quality 0"
             else
               FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
             fi
             
-            yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
-              --cookies "../.github/cookies.txt" \
-              -o "%(title)s.%(ext)s" \
-              "${{ github.event.inputs.url }}"
+            # Use cookies if the file exists
+            if [[ -f "../.github/cookies.txt" ]]; then
+              echo "Using cookies file..."
+              yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
+                --cookies "../.github/cookies.txt" \
+                -o "%(title)s.%(ext)s" \
+                "${{ github.event.inputs.url }}"
+            else
+              echo "No cookies file found, downloading without cookies..."
+              yt-dlp -f "$FORMAT" $EXTRACT_AUDIO \
+                -o "%(title)s.%(ext)s" \
+                "${{ github.event.inputs.url }}"
+            fi
             
           else
             echo "Downloading direct file..."
@@ -147,7 +144,7 @@ jobs:
       - name: Push to repository
         run: |
           git config user.name "github-actions[bot]"
-          git config.user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           
           git add "${{ github.event.inputs.output_folder }}/"
           git commit -m "Download: ${{ github.event.inputs.url }}" || echo "No changes to commit"
