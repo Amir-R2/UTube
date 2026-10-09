@@ -140,7 +140,7 @@ jobs:
           echo "Size: ${FILE_SIZE_MB} MB"
           echo "Base chunk size: ${BASE_CHUNK_MB} MB"
           
-          if [ $FILE_SIZE_MB_INT -le $BASE_CHUNK_MB ]; then
+          if [ "$FILE_SIZE_MB_INT" -le "$BASE_CHUNK_MB" ]; then
             echo "File is smaller than ${BASE_CHUNK_MB}MB, no splitting needed"
             cp "$DOWNLOADED_FILE" "${BASENAME}.001.${EXTENSION}"
             CHUNK_COUNT=1
@@ -151,35 +151,35 @@ jobs:
             MAX_CHUNKS=10
             GITHUB_LIMIT_MB=95
             
-            IDEAL_CHUNK_SIZE=$(( $FILE_SIZE_MB_INT / 5 ))
+            IDEAL_CHUNK_SIZE=$(( FILE_SIZE_MB_INT / 5 ))
             
-            if [ $IDEAL_CHUNK_SIZE -gt $GITHUB_LIMIT_MB ]; then
+            if [ "$IDEAL_CHUNK_SIZE" -gt "$GITHUB_LIMIT_MB" ]; then
               CHUNK_SIZE=$GITHUB_LIMIT_MB
-              CHUNK_COUNT=$(( ($FILE_SIZE_MB_INT + $CHUNK_SIZE - 1) / $CHUNK_SIZE ))
-            elif [ $IDEAL_CHUNK_SIZE -lt $BASE_CHUNK_MB ]; then
+              CHUNK_COUNT=$(( (FILE_SIZE_MB_INT + CHUNK_SIZE - 1) / CHUNK_SIZE ))
+            elif [ "$IDEAL_CHUNK_SIZE" -lt "$BASE_CHUNK_MB" ]; then
               CHUNK_SIZE=$BASE_CHUNK_MB
-              CHUNK_COUNT=$(( ($FILE_SIZE_MB_INT + $CHUNK_SIZE - 1) / $CHUNK_SIZE ))
+              CHUNK_COUNT=$(( (FILE_SIZE_MB_INT + CHUNK_SIZE - 1) / CHUNK_SIZE ))
             else
               CHUNK_SIZE=$IDEAL_CHUNK_SIZE
-              CHUNK_COUNT=$(( ($FILE_SIZE_MB_INT + $CHUNK_SIZE - 1) / $CHUNK_SIZE ))
+              CHUNK_COUNT=$(( (FILE_SIZE_MB_INT + CHUNK_SIZE - 1) / CHUNK_SIZE ))
             fi
             
-            if [ $CHUNK_COUNT -lt $MIN_CHUNKS ]; then
-              CHUNK_SIZE=$(( $FILE_SIZE_MB_INT / $MIN_CHUNKS ))
+            if [ "$CHUNK_COUNT" -lt "$MIN_CHUNKS" ]; then
+              CHUNK_SIZE=$(( FILE_SIZE_MB_INT / MIN_CHUNKS ))
               CHUNK_COUNT=$MIN_CHUNKS
-            elif [ $CHUNK_COUNT -gt $MAX_CHUNKS ]; then
-              CHUNK_SIZE=$(( $FILE_SIZE_MB_INT / $MAX_CHUNKS ))
+            elif [ "$CHUNK_COUNT" -gt "$MAX_CHUNKS" ]; then
+              CHUNK_SIZE=$(( FILE_SIZE_MB_INT / MAX_CHUNKS ))
               CHUNK_COUNT=$MAX_CHUNKS
             fi
             
-            CHUNK_SIZE_BYTES=$(( $CHUNK_SIZE * 1024 * 1024 ))
+            CHUNK_SIZE_BYTES=$(( CHUNK_SIZE * 1024 * 1024 ))
             ACTUAL_CHUNK_SIZE=$CHUNK_SIZE
             
             echo "Splitting ${FILE_SIZE_MB_INT}MB file into ${CHUNK_COUNT} chunks of ~${CHUNK_SIZE}MB each"
             
-            split -b $CHUNK_SIZE_BYTES -d "$DOWNLOADED_FILE" "${BASENAME}.part"
+            split -b "$CHUNK_SIZE_BYTES" -d "$DOWNLOADED_FILE" "${BASENAME}.part"
             
-            for file in ${BASENAME}.part*; do
+            for file in "${BASENAME}.part"*; do
               if [[ -f "$file" ]]; then
                 num=$(echo "$file" | grep -o '[0-9]*$')
                 new_num=$(printf "%03d" $((10#$num + 1)))
@@ -190,7 +190,7 @@ jobs:
             rm -f "$DOWNLOADED_FILE"
           fi
           
-          ACTUAL_CHUNK_COUNT=$(ls -1 ${BASENAME}.[0-9][0-9][0-9].${EXTENSION} 2>/dev/null | wc -l)
+          ACTUAL_CHUNK_COUNT=$(ls -1 "${BASENAME}."[0-9][0-9][0-9]."${EXTENSION}" 2>/dev/null | wc -l)
           
           echo "URL: ${{ github.event.inputs.url }}" > manifest.txt
           echo "Quality: ${{ github.event.inputs.quality }}" >> manifest.txt
@@ -206,7 +206,7 @@ jobs:
           echo "" >> manifest.txt
           echo "Download URLs:" >> manifest.txt
           
-          for chunk in ${BASENAME}.[0-9][0-9][0-9].${EXTENSION}; do
+          for chunk in "${BASENAME}."[0-9][0-9][0-9]."${EXTENSION}"; do
             if [[ -f "$chunk" ]]; then
               echo "https://raw.githubusercontent.com/${{ github.repository }}/main/$OUTPUT_DIR/$chunk" >> manifest.txt
             fi
