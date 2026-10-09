@@ -14,7 +14,7 @@
   <ul>
     <li>1. Download Get cookies.txt extention on chrome</li>
     <li>2. Open youtube.com and extract your cookies</li>
-    <li>3. Open powershell and run the following command (change cookies.txt to the location of your cookies): <br>[Convert]::ToBase64String([IO.File]::ReadAllBytes("cookies.txt")))</li>
+    <li>3. Open powershell and run the following command (change cookies.txt to the location of your cookies): <br>[Convert]::ToBase64String([IO.File]::ReadAllBytes("cookies.txt"))</li>
     <li>4. Copy and paste the result inside YOUTUBE_COOKIES_B64 in actions secrets and variables </li>
 </ul>
 </div>
