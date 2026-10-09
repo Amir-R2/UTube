@@ -1,4 +1,4 @@
-name: Smart Download with Split Cookies (10 Parts)
+name: Smart Download with Base64 Cookies
 
 on:
   workflow_dispatch:
@@ -31,7 +31,7 @@ on:
         type: string
         default: 'downloads'
       use_cookies:
-        description: 'Use YouTube cookies? (requires COOKIES_PART1-10 secrets)'
+        description: 'Use YouTube cookies? (requires YOUTUBE_COOKIES_B64 secret)'
         required: false
         type: boolean
         default: false
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,23 +49,14 @@ jobs:
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
 
-      - name: Combine split cookies into one file (10 parts)
+      - name: Setup Cookie File from Base64
         if: github.event.inputs.use_cookies == 'true'
         run: |
           mkdir -p .github
-          echo "${{ secrets.COOKIES_PART1 }}" > .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART2 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART3 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART4 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART5 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART6 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART7 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART8 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART9 }}" >> .github/cookies.txt
-          echo "${{ secrets.COOKIES_PART10 }}" >> .github/cookies.txt
+          echo "${{ secrets.YOUTUBE_COOKIES_B64 }}" | base64 -d > .github/cookies.txt
           
           if [ -s .github/cookies.txt ]; then
-            echo "Cookies file created from 10 parts"
+            echo "Cookies file successfully decoded and created"
             echo "Size: $(wc -c < .github/cookies.txt) bytes"
           else
             echo "Failed to create cookies file"
